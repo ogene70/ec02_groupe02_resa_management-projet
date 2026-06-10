@@ -1,41 +1,52 @@
-// prisma/seed.ts
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
+import { Pool } from 'pg';
 
-const prisma = new PrismaClient();
+// Instanciation spécifique Prisma 7
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
-    // Hasher les mots de passe
-    const hashedPassword = await bcrypt.hash('password123', 10);
+    console.log('Début du seed...');
 
-    // Créer des utilisateurs
-    const tenant = await prisma.user.upsert({
-        where: { email: 'tenant@example.com' },
-        update: {},
-        create: {
-            email: 'tenant@example.com',
-            password_hash: hashedPassword,
+    const tenant = await prisma.tenant.create({
+        data: {
+            nom: 'Gîtes de la Vallée',
+            email_contact: 'contact@gites-vallee.fr',
+            telephone: '0563000000',
+            domaine_autorise: 'gites-vallee.fr',
+        },
+    });
+    console.log(`Tenant créé: ${tenant.nom}`);
+
+    const passwordHash = await bcrypt.hash('password123!', 10);
+    const user = await prisma.user.create({
+        data: {
+            tenant_id: tenant.id,
             nom: 'Dupont',
             prenom: 'Jean',
-            role: 'TENANT',
-            telephone: '+33123456789',
+            email: 'admin@gites-vallee.fr',
+            password_hash: passwordHash,
+            role: 'gestionnaire',
         },
     });
+    console.log(`User créé: ${user.email}`);
 
-    const voyageur = await prisma.user.upsert({
-        where: { email: 'voyageur@example.com' },
-        update: {},
-        create: {
-            email: 'voyageur@example.com',
-            password_hash: hashedPassword,
-            nom: 'Martin',
-            prenom: 'Pierre',
-            role: 'VOYAGEUR',
-            telephone: '+33987654321',
+    const logement = await prisma.logement.create({
+        data: {
+            tenant_id: tenant.id,
+            titre: 'Chalet romantique avec vue',
+            capacite: 2,
+            adresse: '12 Chemin des Écureuils',
+            ville: 'Montagne-Secrète',
+            code_postal: '81000',
         },
     });
+    console.log(`Logement créé: ${logement.titre}`);
 
-    console.log('Seed terminé :', { tenant, voyageur });
+    console.log('Seed terminé avec succès !');
 }
 
 main()

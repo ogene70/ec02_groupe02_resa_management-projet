@@ -1,29 +1,15 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
-import { PrismaClient } from '@prisma/client';
 
-/**
- * Ce service Prisma personnalisé utilise un Pool de connexion PostgreSQL natif
- * pour gérer les connexions de manière efficace, tout en bénéficiant de l'ORM Prisma.
- *
- * Avantages :
- * - Meilleure gestion des connexions grâce au Pool natif
- * - Intégration transparente avec Prisma via l'adaptateur PrismaPg
- * - Facilité d'utilisation dans les services NestJS
- */
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
-    constructor(private configService: ConfigService) {
-        // 1. On crée un Pool de connexion PostgreSQL natif
-        const connectionString = configService.get<string>('DATABASE_URL');
-        const pool = new Pool({ connectionString });
-
-        // 2. On l'enveloppe dans l'adaptateur Prisma
+    constructor() {
+        // Avec Prisma 7, on utilise un adaptateur natif pour se connecter
+        const pool = new Pool({ connectionString: process.env.DATABASE_URL });
         const adapter = new PrismaPg(pool);
 
-        // 3. On passe l'adaptateur au client Prisma
         super({ adapter });
     }
 

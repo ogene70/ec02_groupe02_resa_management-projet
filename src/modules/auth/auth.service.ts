@@ -1,4 +1,4 @@
-import { Injectable, ConflictException } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -13,73 +13,84 @@ export class AuthService {
         private readonly jwtService: JwtService,
     ) {}
 
-    async login(loginDto: LoginDto): Promise<{ access_token: string; user: Omit<User, 'password_hash'> }> {
-        // Trouver l'utilisateur
-        const user = await this.prisma.user.findUnique({
-            where: { email: loginDto.email },
-        });
+    async register(registerDto: RegisterDto) {
+        const { email, password, nom, prenom, tenantName } = registerDto;
+
+        const userExists = await this.prisma.user.findUnique({ where: { email } });
+        if (userExists) {
+            throw new ConflictException('Un utilisateur avec cet email existe déjà.');
+        }
+
+        // 10 tours (salt rounds) est un bon compromis sécurité/performance.
+        const saltRounds = 10;
+        const passwordHash = await bcrypt.hash(password, saltRounds);
+
+        try {
+            // L'utilisation d'une transaction Prisma ($transaction) est OBLIGATOIRE ici.
+            // Si on crée le Tenant, mais que la création du User échoue (ex: perte réseau),
+            // tout est annulé automatiquement. Cela évite d'avoir des "sociétés fantômes" sans gestionnaire.
+            const newUser = await this.prisma.$transaction(async (prisma) => {
+                const tenant = await prisma.tenant.create({
+                    data: {
+                        nom: tenantName,
+                        email_contact: email,
+                    },
+                });
+
+                return prisma.user.create({
+                    data: {
+                        email,
+                        password_hash: passwordHash,
+                        nom,
+                        prenom,
+                        tenant_id: tenant.id,
+                        role: 'gestionnaire',
+                    },
+                });
+            });
+
+            return this.generateToken(newUser);
+        } catch (error) {
+            throw new InternalServerErrorException('Erreur lors de la création du compte.', { cause: error });
+        }
+    }
+
+    async login(loginDto: LoginDto) {
+        const { email, password } = loginDto;
+
+        const user = await this.prisma.user.findUnique({ where: { email } });
         if (!user) {
-            throw new UnauthorizedException('Email ou mot de passe incorrect.');
+            throw new UnauthorizedException('Identifiants invalides.');
         }
 
-        // Vérifier le mot de passe
-        const isPasswordValid = await bcrypt.compare(loginDto.password, user.password_hash);
+        const isPasswordValid = await bcrypt.compare(password, user.password_hash);
         if (!isPasswordValid) {
-            throw new UnauthorizedException('Email ou mot de passe incorrect.');
+            throw new UnauthorizedException('Identifiants invalides.');
         }
 
-        // Générer le payload JWT
+        return this.generateToken(user);
+    }
+
+    private generateToken(user: User) {
+        // Le payload JWT contient des données non-sensibles.
+        // L'ajout du 'tenantId' ici va nous permettre de sécuriser facilement toutes les autres routes API
         const payload = {
             sub: user.id,
             email: user.email,
             role: user.role,
+            tenantId: user.tenant_id,
         };
 
-        // Générer le token
-        const access_token = this.jwtService.sign(payload);
-
-        // Retourner le token et les infos utilisateur (sans le hash)
-        const { password_hash, ...userWithoutHash } = user;
         return {
-            access_token,
-            user: userWithoutHash,
+            access_token: this.jwtService.sign(payload),
+            user: {
+                id: user.id,
+                email: user.email,
+                nom: user.nom,
+                prenom: user.prenom,
+                role: user.role,
+                tenantId: user.tenant_id,
+            },
         };
-    }
-
-    async register(registerDto: RegisterDto): Promise<Omit<User, 'password_hash'>> {
-        // Vérifier si l'email existe déjà
-        const existingUser = await this.prisma.user.findUnique({
-            where: { email: registerDto.email },
-        });
-        if (existingUser) {
-            throw new ConflictException('Un utilisateur avec cet email existe déjà.');
-        }
-
-        // Hasher le mot de passe
-        const hashedPassword = await bcrypt.hash(registerDto.password, 10);
-
-        // Créer l'utilisateur
-        const user = await this.prisma.user.create({
-            data: {
-                email: registerDto.email,
-                password_hash: hashedPassword,
-                nom: registerDto.nom,
-                prenom: registerDto.prenom,
-                telephone: registerDto.telephone,
-            },
-            select: {
-                id: true,
-                email: true,
-                nom: true,
-                prenom: true,
-                telephone: true,
-                role: true,
-                statut: true,
-                created_at: true,
-                updated_at: true,
-            },
-        });
-
-        return user;
     }
 }
