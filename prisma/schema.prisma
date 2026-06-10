@@ -1,0 +1,219 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+}
+
+enum StatutTenant {
+    actif
+    suspendu
+}
+
+enum RoleUser {
+    gestionnaire
+    admin
+}
+
+enum StatutLogement {
+    actif
+    inactif
+}
+
+enum TypeTarif {
+    base
+    saisonnier
+}
+
+enum StatutDisponibilite {
+    disponible
+    bloque
+}
+
+enum SourceDisponibilite {
+    manuel
+    ical
+    reservation
+}
+
+enum StatutReservation {
+    pending
+    confirme
+    refuse
+    annule
+}
+
+enum StatutPaiement {
+    en_attente
+    reussi
+    echoue
+    rembourse
+}
+
+enum TypeNotification {
+    email
+    sms
+}
+
+enum DestinataireNotification {
+    voyageur
+    gestionnaire
+}
+
+enum StatutNotification {
+    en_attente
+    envoye
+    echoue
+}
+
+// --- Modèles ---
+
+model Tenant {
+    id               String       @id @default(uuid()) @db.Uuid
+    nom              String       @db.VarChar(255)
+    email_contact    String?      @db.VarChar(255)
+    telephone        String?      @db.VarChar(20)
+    logo_url         String?      @db.VarChar(500)
+    domaine_autorise String?      @db.VarChar(255)
+    statut           StatutTenant @default(actif)
+    created_at       DateTime     @default(now())
+    updated_at       DateTime     @updatedAt
+
+    users         User[]
+    logements     Logement[]
+    reservations  Reservation[]
+    notifications Notification[]
+}
+
+model User {
+    id            String   @id @default(uuid()) @db.Uuid
+    tenant_id     String   @db.Uuid
+    nom           String   @db.VarChar(255)
+    prenom        String   @db.VarChar(255)
+    email         String   @unique @db.VarChar(255)
+    password_hash String   @db.VarChar(500)
+    role          RoleUser @default(gestionnaire)
+    created_at    DateTime @default(now())
+    updated_at    DateTime @updatedAt
+
+    tenant Tenant @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+}
+
+model Logement {
+    id          String         @id @default(uuid()) @db.Uuid
+    tenant_id   String         @db.Uuid
+    titre       String         @db.VarChar(255)
+    description String?        @db.Text
+    capacite    Int
+    adresse     String         @db.VarChar(500)
+    ville       String         @db.VarChar(255)
+    code_postal String         @db.VarChar(10)
+    equipements Json?          @db.JsonB
+    regles      Json?          @db.JsonB
+    statut      StatutLogement @default(actif)
+    created_at  DateTime       @default(now())
+    updated_at  DateTime       @updatedAt
+
+    tenant         Tenant          @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+    photos         Photo[]
+    tarifs         Tarif[]
+    disponibilites Disponibilite[]
+    reservations   Reservation[]
+}
+
+model Photo {
+    id          String   @id @default(uuid()) @db.Uuid
+    logement_id String   @db.Uuid
+    url         String   @db.VarChar(500)
+    ordre       Int?
+    alt         String?  @db.VarChar(255)
+    created_at  DateTime @default(now())
+
+    logement Logement @relation(fields: [logement_id], references: [id], onDelete: Cascade)
+}
+
+model Tarif {
+    id             String    @id @default(uuid()) @db.Uuid
+    logement_id    String    @db.Uuid
+    type           TypeTarif @default(base)
+    prix_nuit      Decimal   @db.Decimal(10, 2)
+    date_debut     DateTime? @db.Date
+    date_fin       DateTime? @db.Date
+    sejour_minimum Int?
+    created_at     DateTime  @default(now())
+
+    logement Logement @relation(fields: [logement_id], references: [id], onDelete: Cascade)
+}
+
+model Disponibilite {
+    id          String              @id @default(uuid()) @db.Uuid
+    logement_id String              @db.Uuid
+    date_debut  DateTime            @db.Date
+    date_fin    DateTime            @db.Date
+    statut      StatutDisponibilite @default(disponible)
+    source      SourceDisponibilite @default(manuel)
+    created_at  DateTime            @default(now())
+
+    logement Logement @relation(fields: [logement_id], references: [id], onDelete: Cascade)
+}
+
+model Voyageur {
+    id         String   @id @default(uuid()) @db.Uuid
+    nom        String   @db.VarChar(255)
+    prenom     String   @db.VarChar(255)
+    email      String   @unique @db.VarChar(255)
+    telephone  String?  @db.VarChar(20)
+    created_at DateTime @default(now())
+
+    reservations Reservation[]
+}
+
+model Reservation {
+    id               String            @id @default(uuid()) @db.Uuid
+    logement_id      String            @db.Uuid
+    voyageur_id      String            @db.Uuid
+    tenant_id        String            @db.Uuid
+    date_arrivee     DateTime          @db.Date
+    date_depart      DateTime          @db.Date
+    nb_personnes     Int
+    prix_total       Decimal           @db.Decimal(10, 2)
+    statut           StatutReservation @default(pending)
+    message_voyageur String?           @db.Text
+    created_at       DateTime          @default(now())
+    updated_at       DateTime          @updatedAt
+
+    logement      Logement       @relation(fields: [logement_id], references: [id])
+    voyageur      Voyageur       @relation(fields: [voyageur_id], references: [id])
+    tenant        Tenant         @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+    paiement      Paiement?
+    notifications Notification[]
+}
+
+model Paiement {
+    id              String         @id @default(uuid()) @db.Uuid
+    reservation_id  String         @unique @db.Uuid // Relation 1:1
+    montant         Decimal        @db.Decimal(10, 2)
+    devise          String         @default("EUR") @db.VarChar(3)
+    statut          StatutPaiement @default(en_attente)
+    transaction_ref String?        @db.VarChar(255)
+    created_at      DateTime       @default(now())
+
+    reservation Reservation @relation(fields: [reservation_id], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+    id             String                   @id @default(uuid()) @db.Uuid
+    reservation_id String?                  @db.Uuid
+    tenant_id      String                   @db.Uuid
+    type           TypeNotification         @default(email)
+    destinataire   DestinataireNotification
+    sujet          String                   @db.VarChar(255)
+    contenu        String                   @db.Text
+    statut         StatutNotification       @default(en_attente)
+    sent_at        DateTime?
+    created_at     DateTime                 @default(now())
+
+    reservation Reservation? @relation(fields: [reservation_id], references: [id], onDelete: SetNull)
+    tenant      Tenant       @relation(fields: [tenant_id], references: [id], onDelete: Cascade)
+}
