@@ -1,0 +1,215 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+// generator client {
+//   provider = "prisma-client"
+//   output   = "../generated/prisma"
+// }
+//
+// datasource db {
+//   provider = "postgresql"
+// }
+
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            UUID     @id @default(uuid())
+  email         String   @unique
+  password_hash String
+  nom           String
+  prenom        String
+  role          Role     @default(TENANT)
+  statut        Statut   @default(ACTIF)
+  telephone     String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  // Relations
+  reservations  Reservation[]
+  notifications Notification[]
+  logements     Logement[]
+  paiements     Paiement[]
+}
+
+model Reservation {
+  id               UUID              @id @default(uuid())
+  date_arrivee     DateTime
+  date_depart      DateTime
+  nb_personnes     Int
+  prix_total       Decimal           @db.Decimal(10, 2)
+  statut           StatutReservation
+  message_voyageur String?
+  created_at       DateTime          @default(now())
+  updated_at       DateTime          @updatedAt
+
+  // Relations
+  tenant      User     @relation(fields: [tenant_id], references: [id])
+  tenant_id   UUID
+  voyageur    User     @relation(fields: [voyageur_id], references: [id])
+  voyageur_id UUID
+  logement    Logement @relation(fields: [logement_id], references: [id])
+  logement_id UUID
+
+  paiements     Paiement[]
+  notifications Notification[]
+}
+
+model Logement {
+  id          UUID           @id @default(uuid())
+  titre       String
+  description String
+  capacite    Int
+  ville       String
+  adresse     String
+  code_postal String
+  equipements Json
+  statut      StatutLogement
+  created_at  DateTime       @default(now())
+  updated_at  DateTime       @updatedAt
+
+  // Relations
+  tenant         User            @relation(fields: [tenant_id], references: [id])
+  tenant_id      UUID
+  reservations   Reservation[]
+  photos         Photo[]
+  tarifs         Tarif[]
+  disponibilites Disponibilite[]
+}
+
+model Photo {
+  id         UUID     @id @default(uuid())
+  url        String
+  ordre      Int
+  alt        String?
+  created_at DateTime @default(now())
+
+  // Relations
+  logement    Logement @relation(fields: [logement_id], references: [id])
+  logement_id UUID
+}
+
+model Tarif {
+  id                 UUID      @id @default(uuid())
+  type               TypeTarif
+  prix_nuit          Decimal   @db.Decimal(10, 2)
+  date_debut         DateTime
+  date_fin           DateTime
+  seuil_jour_minimum Int?
+  created_at         DateTime  @default(now())
+
+  // Relations
+  logement    Logement @relation(fields: [logement_id], references: [id])
+  logement_id UUID
+}
+
+model Disponibilite {
+  id         UUID                @id @default(uuid())
+  date_debut DateTime
+  date_fin   DateTime
+  statut     StatutDisponibilite
+  source     SourceDisponibilite
+  created_at DateTime            @default(now())
+
+  // Relations
+  logement    Logement @relation(fields: [logement_id], references: [id])
+  logement_id UUID
+}
+
+model Paiement {
+  id              UUID           @id @default(uuid())
+  montant         Decimal        @db.Decimal(10, 2)
+  devise          String         @default("EUR")
+  statut          StatutPaiement
+  transaction_ref String?
+  created_at      DateTime       @default(now())
+
+  // Relations
+  reservation    Reservation @relation(fields: [reservation_id], references: [id])
+  reservation_id UUID
+}
+
+model Notification {
+  id           UUID               @id @default(uuid())
+  type         TypeNotification
+  destinataire Role
+  sujet        String
+  contenu      String
+  statut       StatutNotification
+  sent_at      DateTime?
+  created_at   DateTime           @default(now())
+
+  // Relations
+  reservation    Reservation? @relation(fields: [reservation_id], references: [id])
+  reservation_id UUID?
+  tenant         User         @relation(fields: [tenant_id], references: [id])
+  tenant_id      UUID
+}
+
+// Énumérations
+enum Role {
+  TENANT
+  VOYAGEUR
+  GESTIONNAIRE
+  ADMIN
+}
+
+enum Statut {
+  ACTIF
+  SUSPENDU
+}
+
+enum StatutReservation {
+  PENDING
+  CONFIRME
+  REFUSE
+  ANNULE
+}
+
+enum StatutLogement {
+  ACTIF
+  INACTIF
+}
+
+enum StatutPaiement {
+  EN_ATTENTE
+  REUSSI
+  ECHOUE
+  REMBOURSE
+}
+
+enum TypeTarif {
+  BASE
+  SAISONNIER
+}
+
+enum StatutDisponibilite {
+  DISPONIBLE
+  BLOQUE
+}
+
+enum SourceDisponibilite {
+  MANUEL
+  ICAL
+  RESERVATION
+}
+
+enum TypeNotification {
+  EMAIL
+  SMS
+}
+
+enum StatutNotification {
+  EN_ATTENTE
+  ENVOYE
+  ECHOUE
+}
