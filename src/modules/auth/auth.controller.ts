@@ -6,6 +6,16 @@ import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { UsersService } from '../users/users.service';
 
+// Interface pour typer proprement notre Request et faire taire ESLint
+interface RequestWithUser extends Request {
+    user: {
+        id: string;
+        email: string;
+        role: string;
+        tenantId: string;
+    };
+}
+
 @ApiTags('Authentification') // Regroupe les endpoints dans Swagger UI sous "Authentification"
 @Controller('auth')
 export class AuthController {
@@ -23,7 +33,7 @@ export class AuthController {
 
     @Post('login')
     @ApiOperation({ summary: "Connexion de l'utilisateur" })
-    @HttpCode(HttpStatus.OK) // [NOTE FRONTEND] : Override car NestJS renvoie 201 par défaut sur les POST
+    @HttpCode(HttpStatus.OK) // Override car NestJS renvoie 201 par défaut sur les POST
     async login(@Body() loginDto: LoginDto) {
         return this.authService.login(loginDto);
     }
@@ -46,11 +56,9 @@ export class AuthController {
     @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
     @ApiOperation({ summary: "Récupérer le profil complet de l'utilisateur connecté" })
-    getProfile(@Request() req: any) {
-        // On utilise le payload validé par la JwtStrategy pour extraire l'ID.
-        // Ensuite, on interroge la base via UsersService pour renvoyer un profil à jour.
-
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument
+    async getProfile(@Request() req: RequestWithUser) {
+        // On requête la base de données via le UsersService pour renvoyer le profil complet et à jour de l'utilisateur
+        // sans y inclure son mot de passe.
         return this.usersService.findOne(req.user.id);
     }
 }
