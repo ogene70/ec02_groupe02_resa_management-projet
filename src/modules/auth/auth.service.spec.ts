@@ -5,6 +5,11 @@ import { AuthService } from './auth.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 
+jest.mock('bcrypt', () => ({
+    compare: jest.fn(),
+    hash: jest.fn(),
+}));
+
 describe('AuthService', () => {
     let service: AuthService;
 
@@ -45,7 +50,7 @@ describe('AuthService', () => {
         });
 
         // On simule bcrypt.compare qui renvoie "false"
-        jest.spyOn(bcrypt, 'compare').mockImplementation(async () => false as any);
+        (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
         await expect(service.login({ email: 'test@test.fr', password: 'wrong_password' })).rejects.toThrow(UnauthorizedException);
     });

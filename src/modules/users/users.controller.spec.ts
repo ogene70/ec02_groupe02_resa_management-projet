@@ -5,10 +5,21 @@ import { UsersService } from './users.service';
 describe('UsersController', () => {
     let controller: UsersController;
 
+    // Création d'un faux UsersService
+    const mockUsersService = {
+        create: jest.fn(),
+        findAll: jest.fn(),
+        findOne: jest.fn(),
+        update: jest.fn(),
+        remove: jest.fn(),
+    };
+
     beforeEach(async () => {
         const module: TestingModule = await Test.createTestingModule({
             controllers: [UsersController],
-            providers: [UsersService],
+            providers: [
+                { provide: UsersService, useValue: mockUsersService }, // On injecte le faux service
+            ],
         }).compile();
 
         controller = module.get<UsersController>(UsersController);
