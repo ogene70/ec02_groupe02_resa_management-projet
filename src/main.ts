@@ -2,6 +2,7 @@ import { ValidationPipe, Logger, ClassSerializerInterceptor } from '@nestjs/comm
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { NestFactory, Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { PrismaClientExceptionFilter } from './core/filters/prisma-client-exception.filter';
 
 async function bootstrap() {
     const app = await NestFactory.create(AppModule);
@@ -23,8 +24,9 @@ async function bootstrap() {
     app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
     // Activation du Filtre d'Exception Global Prisma
-    // const { httpAdapter } = app.get(HttpAdapterHost);
-    // app.useGlobalFilters(new PrismaClientExceptionFilter(httpAdapter));
+    // On précise à NestJS qu'on s'attend à recevoir un objet de type HttpAdapterHost
+    // const httpAdapterHost = app.get<HttpAdapterHost>(HttpAdapterHost);
+    // app.useGlobalFilters(new PrismaClientExceptionFilter(httpAdapterHost.httpAdapter));
 
     // Activation de CORS (Indispensable pour qu'Angular puisse appeler l'API)
     app.enableCors();
